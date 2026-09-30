@@ -1,0 +1,29 @@
+# dependencies (installed fresh inside the image)
+node_modules
+**/node_modules
+
+# build output (client is rebuilt in the image)
+client/dist
+dist
+
+# git & ci
+.git
+.gitignore
+.github
+
+# env & logs
+.env
+.env.*
+*.log
+npm-debug.log*
+
+# editor / os
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
