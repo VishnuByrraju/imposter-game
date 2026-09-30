@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0a0a0c"/>
+  <rect x="24" y="24" width="464" height="464" rx="72" fill="none" stroke="#2b2b33" stroke-width="2"/>
+  <!-- redaction bars -->
+  <rect x="120" y="150" width="180" height="26" rx="4" fill="#1b1b1f"/>
+  <rect x="120" y="196" width="272" height="26" rx="4" fill="#1b1b1f"/>
+  <rect x="120" y="242" width="140" height="26" rx="4" fill="#1b1b1f"/>
+  <!-- classified stamp -->
+  <g transform="rotate(-8 256 350)">
+    <rect x="150" y="316" width="212" height="70" fill="none" stroke="#ff4d4d" stroke-width="8"/>
+    <text x="256" y="362" font-family="Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="4" text-anchor="middle" fill="#ff4d4d">IMPOSTER</text>
+  </g>
+</svg>

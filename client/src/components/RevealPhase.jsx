@@ -3,20 +3,22 @@ import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { useGame } from "../App.jsx";
 import { Logo, Panel, Avatar, PhaseBadge } from "./ui.jsx";
+import { categoryMeta } from "../constants.js";
 
 export default function RevealPhase() {
   const { room, isHost, playerId, actions } = useGame();
   const result = room.result;
 
-  const imposter = room.players.find((p) => p.id === result?.imposterId);
-  const votedOut = room.players.find((p) => p.id === result?.votedOutId);
-  const iAmImposter = result?.imposterId === playerId;
+  const imposterIds = result?.imposterIds || [];
+  const imposters = imposterIds
+    .map((id) => room.players.find((p) => p.id === id))
+    .filter(Boolean);
+  const iAmImposter = imposterIds.includes(playerId);
+  const cat = categoryMeta(result?.category);
 
   const votesByTarget = useMemo(() => {
     const map = {};
-    for (const v of room.votes) {
-      (map[v.targetId] ||= []).push(v.voterId);
-    }
+    for (const v of room.votes) (map[v.targetId] ||= []).push(v.voterId);
     return map;
   }, [room.votes]);
 
@@ -25,29 +27,15 @@ export default function RevealPhase() {
     [room.players]
   );
 
-  // Celebration: crew wins -> greens/blues, imposter wins -> pinks/purples.
   useEffect(() => {
     if (!result) return;
-    const crewWon = result.caught;
-    const colors = crewWon
-      ? ["#22d3ee", "#a3e635", "#ffffff"]
-      : ["#ec4899", "#a855f7", "#fbbf24"];
-    const end = Date.now() + 900;
+    const colors = result.caught
+      ? ["#38d996", "#e8b64c", "#f3f0e8"]
+      : ["#ff4d4d", "#e8b64c", "#f3f0e8"];
+    const end = Date.now() + 800;
     (function frame() {
-      confetti({
-        particleCount: 4,
-        angle: 60,
-        spread: 60,
-        origin: { x: 0 },
-        colors,
-      });
-      confetti({
-        particleCount: 4,
-        angle: 120,
-        spread: 60,
-        origin: { x: 1 },
-        colors,
-      });
+      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors, scalar: 0.9 });
+      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors, scalar: 0.9 });
       if (Date.now() < end) requestAnimationFrame(frame);
     })();
   }, [result]);
@@ -56,69 +44,77 @@ export default function RevealPhase() {
 
   const crewWon = result.caught;
   const youWon = crewWon ? !iAmImposter : iAmImposter;
+  const verdict = crewWon ? "CAUGHT" : result.tie ? "STALEMATE" : "ESCAPED";
+  const verdictTone = crewWon ? "#38d996" : "#ff4d4d";
 
   return (
-    <div className="flex flex-1 flex-col gap-5 pt-14">
+    <div className="flex flex-1 flex-col gap-4 pt-12">
       <div className="flex items-center justify-between">
         <Logo small />
         <PhaseBadge phase="reveal" round={room.round} />
       </div>
 
-      {/* Verdict banner */}
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 16 }}
-      >
-        <Panel
-          strong
-          className="text-center"
+      {/* Verdict */}
+      <Panel raised tab="Verdict" tabTone={crewWon ? "safe" : "danger"} className="text-center">
+        <motion.div
+          initial={{ scale: 1.5, rotate: -12, opacity: 0 }}
+          animate={{ scale: 1, rotate: -6, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 12 }}
+          className="mx-auto inline-block border-4 px-6 py-1"
+          style={{ borderColor: verdictTone, color: verdictTone }}
         >
-          <p className="text-xs font-bold tracking-[0.35em] text-white/40">
-            {crewWon ? "IMPOSTER CAUGHT" : result.tie ? "TIE — IMPOSTER ESCAPED" : "IMPOSTER ESCAPED"}
-          </p>
-          <div className="my-4 flex items-center justify-center gap-4">
-            <Avatar
-              emoji={imposter?.avatar}
-              size={72}
-              ring="rgba(236,72,153,0.7)"
-              glow="rgba(236,72,153,0.6)"
-            />
-            <div className="text-left">
-              <div className="font-display text-3xl font-bold text-neon-pink">
-                {imposter?.name}
+          <span className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
+            {verdict}
+          </span>
+        </motion.div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
+          {imposters.map((imp) => (
+            <div key={imp.id} className="flex items-center gap-3">
+              <Avatar emoji={imp.avatar} size={56} tone="#ff4d4d" />
+              <div className="text-left">
+                <div className="font-display text-2xl uppercase text-danger">
+                  {imp.name}
+                </div>
+                <div className="label !text-[0.6rem]">
+                  {imp.id === playerId ? "that was you" : "was an imposter"}
+                </div>
               </div>
-              <div className="text-sm text-white/50">was the imposter</div>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
-            <span className="rounded-full bg-neon-cyan/15 px-4 py-1.5">
-              real word · <b className="text-neon-cyan">{result.commonWord}</b>
-            </span>
-            <span className="rounded-full bg-neon-pink/15 px-4 py-1.5">
-              imposter's word · <b className="text-neon-pink">{result.imposterWord}</b>
-            </span>
-          </div>
+          ))}
+        </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={`mt-5 inline-block rounded-2xl px-6 py-2 font-display text-xl font-bold ${
-              youWon ? "text-neon-lime" : "text-white/70"
-            }`}
-          >
-            {youWon ? "🎉 You won this round!" : "💀 You lost this round"}
-          </motion.div>
-        </Panel>
-      </motion.div>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+          {cat && (
+            <span className="mono border border-line px-2.5 py-1 text-xs text-ink-dim">
+              {cat.emoji} {cat.label}
+            </span>
+          )}
+          <span className="mono border border-safe/40 px-2.5 py-1 text-xs text-safe">
+            word · {result.commonWord}
+          </span>
+          {result.imposterWord ? (
+            <span className="mono border border-danger/40 px-2.5 py-1 text-xs text-danger">
+              decoy · {result.imposterWord}
+            </span>
+          ) : (
+            <span className="mono border border-danger/40 px-2.5 py-1 text-xs text-danger">
+              imposter had no word
+            </span>
+          )}
+        </div>
 
-      {/* Vote breakdown */}
-      <Panel>
-        <h3 className="mb-3 text-sm font-semibold tracking-widest text-white/40">
-          VOTES
-        </h3>
-        <div className="flex flex-col gap-2">
+        <div
+          className="mt-5 inline-block font-display text-2xl uppercase"
+          style={{ color: youWon ? "#38d996" : "#9a9aa4" }}
+        >
+          {youWon ? "You win this round" : "You lose this round"}
+        </div>
+      </Panel>
+
+      {/* Votes */}
+      <Panel tab="Tally">
+        <div className="flex flex-col gap-1.5">
           {room.players
             .filter((p) => (votesByTarget[p.id] || []).length > 0)
             .sort(
@@ -128,31 +124,32 @@ export default function RevealPhase() {
             )
             .map((p) => {
               const voters = votesByTarget[p.id] || [];
-              const isImp = p.id === result.imposterId;
+              const isImp = imposterIds.includes(p.id);
               return (
                 <div
                   key={p.id}
-                  className={`flex items-center gap-3 rounded-2xl border p-3 ${
-                    isImp
-                      ? "border-neon-pink/50 bg-neon-pink/5"
-                      : "border-white/8 bg-white/[0.03]"
+                  className={`flex items-center gap-3 border p-2.5 ${
+                    isImp ? "border-danger/50 bg-danger/[0.06]" : "border-line bg-panel-2"
                   }`}
                 >
-                  <Avatar emoji={p.avatar} size={38} />
-                  <span className="font-semibold">
+                  <Avatar emoji={p.avatar} size={34} />
+                  <span className="font-medium">
                     {p.name}
-                    {isImp && <span className="ml-2 text-xs text-neon-pink">imposter</span>}
+                    {isImp && (
+                      <span className="label ml-2 !text-[0.6rem] !text-danger">imposter</span>
+                    )}
                   </span>
                   <div className="ml-auto flex items-center gap-1">
-                    {voters.map((vid) => {
-                      const voter = room.players.find((x) => x.id === vid);
-                      return (
-                        <span key={vid} title={voter?.name} className="text-lg">
-                          {voter?.avatar}
-                        </span>
-                      );
-                    })}
-                    <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-sm font-bold">
+                    {voters.map((vid) => (
+                      <span
+                        key={vid}
+                        title={room.players.find((x) => x.id === vid)?.name}
+                        className="text-base"
+                      >
+                        {room.players.find((x) => x.id === vid)?.avatar}
+                      </span>
+                    ))}
+                    <span className="mono ml-2 border border-line px-2 py-0.5 text-sm">
                       {voters.length}
                     </span>
                   </div>
@@ -163,32 +160,27 @@ export default function RevealPhase() {
       </Panel>
 
       {/* Scoreboard */}
-      <Panel>
-        <h3 className="mb-3 text-sm font-semibold tracking-widest text-white/40">
-          SCOREBOARD
-        </h3>
-        <div className="flex flex-col gap-1.5">
+      <Panel tab="Standings" tabTone="gold">
+        <div className="flex flex-col gap-1">
           {scoreboard.map((p, i) => (
             <motion.div
               key={p.id}
               layout
-              className="flex items-center gap-3 rounded-xl px-3 py-2"
-              style={{
-                background:
-                  i === 0 ? "rgba(251,191,36,0.1)" : "rgba(255,255,255,0.02)",
-              }}
+              className={`flex items-center gap-3 border px-3 py-2 ${
+                i === 0 ? "border-gold/50 bg-gold/[0.06]" : "border-transparent"
+              }`}
             >
-              <span className="w-6 text-center font-bold text-white/40">
-                {i === 0 ? "🏆" : i + 1}
+              <span className="mono w-6 text-center text-sm text-ink-faint">
+                {i === 0 ? "01" : String(i + 1).padStart(2, "0")}
               </span>
-              <Avatar emoji={p.avatar} size={34} />
-              <span className="font-semibold">
+              <Avatar emoji={p.avatar} size={32} corner={i === 0 ? "★" : null} />
+              <span className="font-medium">
                 {p.name}
                 {p.id === playerId && (
-                  <span className="ml-1 text-xs text-neon-cyan">(you)</span>
+                  <span className="label ml-1.5 !text-[0.6rem] !text-safe">you</span>
                 )}
               </span>
-              <span className="ml-auto font-display text-xl font-bold text-neon-amber">
+              <span className="ml-auto font-display text-2xl text-gold">
                 {p.score}
               </span>
             </motion.div>
@@ -199,16 +191,17 @@ export default function RevealPhase() {
       <div className="mt-auto flex flex-col gap-3 pb-4 sm:flex-row">
         {isHost ? (
           <>
-            <button className="btn-ghost sm:w-44" onClick={actions.toLobby}>
-              Back to lobby
+            <button className="btn-ghost sm:w-40" onClick={actions.toLobby}>
+              Close case
             </button>
             <button className="btn-primary flex-1 text-lg" onClick={actions.next}>
-              ▶ Next round
+              Next round
             </button>
           </>
         ) : (
-          <div className="btn-ghost flex-1 cursor-default text-white/60">
-            Waiting for host to start the next round…
+          <div className="flex flex-1 items-center justify-center gap-2 border border-line py-3 text-ink-dim">
+            <span className="h-1.5 w-1.5 animate-blink rounded-full bg-gold" />
+            <span className="label">waiting for next round</span>
           </div>
         )}
       </div>

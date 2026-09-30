@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../App.jsx";
 import { Logo, Panel } from "./ui.jsx";
+import InstallButton from "./InstallButton.jsx";
 
 export default function Home() {
   const { name, setName, actions, connected } = useGame();
@@ -9,22 +10,31 @@ export default function Home() {
   const [mode, setMode] = useState("menu"); // menu | join
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-10 py-10">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 py-8">
+      <InstallButton />
+
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 18 }}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center gap-4 text-center"
       >
-        <Logo />
+        <span className="label border border-line px-3 py-1 !text-danger">
+          ● Live · Social Deduction
+        </span>
+        <h1 className="font-display text-6xl uppercase leading-[0.9] sm:text-8xl">
+          Impost<span className="text-danger">e</span>r
+        </h1>
+        <p className="max-w-sm text-sm text-ink-dim">
+          One of you is lying. Everyone gets the secret word — except the
+          imposter. Give a clue, read the room, and vote them out.
+        </p>
       </motion.div>
 
-      <Panel strong className="w-full max-w-md">
-        <label className="mb-2 block text-xs font-semibold tracking-widest text-white/40">
-          YOUR NAME
-        </label>
+      <Panel raised tab="Agent ID" className="w-full max-w-md">
+        <label className="label mb-2 block">Codename</label>
         <input
           className="input mb-5"
-          placeholder="e.g. Sherlock"
+          placeholder="Enter your name"
           value={name}
           maxLength={16}
           onChange={(e) => setName(e.target.value)}
@@ -37,32 +47,30 @@ export default function Home() {
               disabled={!connected}
               onClick={actions.create}
             >
-              ✦ Create a room
+              Open a new case
             </button>
             <button
-              className="btn-ghost text-lg"
+              className="btn-ghost"
               disabled={!connected}
               onClick={() => setMode("join")}
             >
-              Join with code
+              Join with a case code
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
+            <label className="label block">Case code</label>
             <input
-              className="input text-center text-2xl font-bold uppercase tracking-[0.5em]"
-              placeholder="CODE"
+              className="input mono text-center text-2xl font-bold uppercase tracking-[0.5em]"
+              placeholder="•••••"
               value={code}
               maxLength={5}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && actions.join(code)}
             />
             <div className="flex gap-3">
-              <button
-                className="btn-ghost flex-1"
-                onClick={() => setMode("menu")}
-              >
-                ← Back
+              <button className="btn-ghost flex-1" onClick={() => setMode("menu")}>
+                Back
               </button>
               <button
                 className="btn-primary flex-1"
@@ -83,23 +91,35 @@ export default function Home() {
 
 function HowToPlay() {
   const steps = [
-    { icon: "🎴", t: "Everyone gets a secret word", d: "…except the imposter, who gets a similar one." },
-    { icon: "💬", t: "Give a one-word clue", d: "Describe your word without being too obvious." },
-    { icon: "🗳️", t: "Vote out the imposter", d: "Spot who doesn't quite fit in." },
+    {
+      n: "01",
+      t: "Get your word",
+      d: "Everyone sees the same secret word — the imposter doesn't.",
+    },
+    {
+      n: "02",
+      t: "Give one clue",
+      d: "Describe the word. Too obvious and the imposter copies you.",
+    },
+    {
+      n: "03",
+      t: "Vote the liar",
+      d: "Whoever fits in the least gets voted out. Were you right?",
+    },
   ];
   return (
-    <div className="grid w-full max-w-3xl gap-3 sm:grid-cols-3">
+    <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
       {steps.map((s, i) => (
         <motion.div
-          key={s.t}
-          initial={{ opacity: 0, y: 16 }}
+          key={s.n}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 + i * 0.1 }}
-          className="glass rounded-2xl p-4"
+          transition={{ delay: 0.15 + i * 0.08 }}
+          className="card p-4"
         >
-          <div className="mb-2 text-2xl">{s.icon}</div>
+          <div className="mono mb-2 text-2xl font-bold text-danger">{s.n}</div>
           <div className="font-semibold">{s.t}</div>
-          <div className="mt-1 text-sm text-white/50">{s.d}</div>
+          <div className="mt-1 text-sm text-ink-dim">{s.d}</div>
         </motion.div>
       ))}
     </div>

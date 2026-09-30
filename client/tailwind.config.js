@@ -4,42 +4,45 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Clash Display"', "Space Grotesk", "system-ui", "sans-serif"],
-        sans: ["Space Grotesk", "system-ui", "sans-serif"],
+        display: ["Anton", "Impact", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       colors: {
+        bg: "#0a0a0c",
+        panel: {
+          DEFAULT: "#141417",
+          2: "#1b1b1f",
+          3: "#232329",
+        },
+        line: "#2b2b33",
         ink: {
-          900: "#080711",
-          800: "#0e0b1e",
-          700: "#161232",
-          600: "#211a47",
+          DEFAULT: "#f3f0e8",
+          dim: "#9a9aa4",
+          faint: "#63636d",
         },
-        neon: {
-          purple: "#a855f7",
-          pink: "#ec4899",
-          cyan: "#22d3ee",
-          lime: "#a3e635",
-          amber: "#fbbf24",
-        },
+        danger: "#ff4d4d",
+        safe: "#38d996",
+        gold: "#e8b64c",
+      },
+      boxShadow: {
+        hard: "4px 4px 0 0 rgba(0,0,0,0.55)",
+        "hard-sm": "2px 2px 0 0 rgba(0,0,0,0.5)",
       },
       keyframes: {
-        float: {
-          "0%,100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-10px)" },
+        stampIn: {
+          "0%": { transform: "scale(1.6) rotate(-12deg)", opacity: "0" },
+          "60%": { opacity: "1" },
+          "100%": { transform: "scale(1) rotate(-8deg)", opacity: "1" },
         },
-        shimmer: {
-          "0%": { backgroundPosition: "200% 0" },
-          "100%": { backgroundPosition: "-200% 0" },
-        },
-        pulseGlow: {
-          "0%,100%": { opacity: "0.6" },
-          "50%": { opacity: "1" },
+        blink: {
+          "0%,100%": { opacity: "1" },
+          "50%": { opacity: "0.25" },
         },
       },
       animation: {
-        float: "float 6s ease-in-out infinite",
-        shimmer: "shimmer 6s linear infinite",
-        pulseGlow: "pulseGlow 2.5s ease-in-out infinite",
+        stampIn: "stampIn 0.45s cubic-bezier(0.22,1,0.36,1) both",
+        blink: "blink 1.4s steps(1) infinite",
       },
     },
   },

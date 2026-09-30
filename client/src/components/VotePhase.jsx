@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../App.jsx";
-import { Logo, Panel, Avatar, PhaseBadge } from "./ui.jsx";
+import { Logo, Panel, Avatar, PhaseBadge, Chip } from "./ui.jsx";
+import { categoryMeta } from "../constants.js";
+import EmoteBar from "./EmoteBar.jsx";
 
 export default function VotePhase() {
   const { room, playerId, actions } = useGame();
@@ -11,6 +13,7 @@ export default function VotePhase() {
   const others = room.players.filter((p) => p.id !== playerId && p.connected);
   const votedCount = room.votesCount;
   const total = room.players.filter((p) => p.connected).length;
+  const cat = categoryMeta(room.category);
 
   const cast = (id) => {
     setVotedTarget(id);
@@ -18,81 +21,92 @@ export default function VotePhase() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-5 pt-14">
+    <div className="flex flex-1 flex-col gap-4 pt-12">
       <div className="flex items-center justify-between">
         <Logo small />
         <PhaseBadge phase="vote" round={room.round} />
       </div>
 
-      <Panel strong className="text-center">
-        <h2 className="font-display text-2xl font-bold sm:text-3xl">
-          Who is the <span className="text-neon-pink">imposter?</span>
+      <Panel raised tab="Accusation" tabTone="danger">
+        <h2 className="font-display text-3xl uppercase leading-none sm:text-4xl">
+          Name the imposter
         </h2>
-        <p className="mt-1 text-sm text-white/50">
-          Review the clues and cast your vote · {votedCount}/{total} voted
+        <p className="mt-2 text-sm text-ink-dim">
+          Weigh the statements. Point your finger. You can change your call until
+          everyone has voted.
         </p>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <Chip tone="danger">
+            {room.settings?.imposterCount > 1
+              ? `${room.settings.imposterCount} imposters`
+              : "1 imposter"}
+          </Chip>
+          {cat && <Chip>{cat.emoji} {cat.label}</Chip>}
+          <Chip tone="gold">
+            {votedCount}/{total} voted
+          </Chip>
+        </div>
+        <div className="mt-3 h-1 w-full bg-panel-2">
           <motion.div
-            className="h-full rounded-full"
-            style={{ background: "linear-gradient(90deg,#a855f7,#ec4899)" }}
+            className="h-full bg-danger"
             animate={{ width: `${(votedCount / Math.max(1, total)) * 100}%` }}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
           />
         </div>
       </Panel>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {others.map((p) => {
           const selected = votedTarget === p.id;
           return (
             <motion.button
               key={p.id}
               layout
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => cast(p.id)}
-              className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+              className={`flex items-center gap-3 border p-3 text-left transition ${
                 selected
-                  ? "border-neon-pink bg-neon-pink/10 shadow-[0_0_30px_-8px_rgba(236,72,153,0.7)]"
-                  : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.06]"
+                  ? "border-danger bg-danger/10"
+                  : "border-line bg-panel hover:border-ink-faint"
               }`}
             >
               <Avatar
                 emoji={p.avatar}
-                size={48}
-                ring={selected ? "rgba(236,72,153,0.7)" : undefined}
+                size={46}
+                tone={selected ? "#ff4d4d" : undefined}
               />
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">{p.name}</div>
-                <div className="truncate text-sm text-white/50">
-                  clue:{" "}
-                  <span className="text-neon-lime">“{clueMap[p.id] || "—"}”</span>
+                <div className="mono mt-0.5 truncate text-sm text-ink-dim">
+                  “{clueMap[p.id] || "—"}”
                 </div>
               </div>
-              {selected && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="text-xl text-neon-pink"
-                >
-                  ✓
-                </motion.span>
-              )}
+              <span
+                className={`grid h-7 w-7 place-items-center border text-sm ${
+                  selected
+                    ? "border-danger bg-danger text-bg"
+                    : "border-line text-ink-faint"
+                }`}
+              >
+                {selected ? "✓" : "?"}
+              </span>
             </motion.button>
           );
         })}
       </div>
 
-      <div className="mt-auto pb-3 text-center text-sm text-white/50">
+      <div className="mt-auto pb-3 text-center">
         {votedTarget ? (
-          <span className="text-neon-pink">
-            You voted for{" "}
-            <b>{room.players.find((p) => p.id === votedTarget)?.name}</b> · you can
-            change it until everyone votes
-          </span>
+          <p className="label !text-danger">
+            accusing {room.players.find((p) => p.id === votedTarget)?.name} · tap
+            another to change
+          </p>
         ) : (
-          "Tap a player to cast your vote"
+          <p className="label">select a suspect to cast your vote</p>
         )}
       </div>
+
+      <EmoteBar />
     </div>
   );
 }

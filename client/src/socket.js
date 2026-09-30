@@ -30,6 +30,19 @@ export function saveName(name) {
   localStorage.setItem("imposter_name", name);
 }
 
+// Remember which room we're in so we can auto-rejoin after a refresh / drop.
+export function getSavedRoom() {
+  return localStorage.getItem("imposter_room") || "";
+}
+
+export function saveRoom(code) {
+  if (code) localStorage.setItem("imposter_room", code);
+}
+
+export function clearSavedRoom() {
+  localStorage.removeItem("imposter_room");
+}
+
 // Promise wrapper around emit-with-ack.
 export function emit(event, payload) {
   return new Promise((resolve) => {

@@ -122,6 +122,55 @@ io.on("connection", (socket) => {
     sync(room);
   });
 
+  socket.on("room:settings", (settings, cb) => {
+    const room = currentRoom();
+    if (!room) return cb?.({ error: "Not in a room." });
+    if (room.hostId !== socket.data.playerId)
+      return cb?.({ error: "Only the host can change settings." });
+    if (room.phase !== "lobby")
+      return cb?.({ error: "Settings can only change in the lobby." });
+    room.updateSettings(settings || {});
+    cb?.({ ok: true });
+    sync(room);
+  });
+
+  socket.on("room:kick", ({ playerId }, cb) => {
+    const room = currentRoom();
+    if (!room) return cb?.({ error: "Not in a room." });
+    if (room.hostId !== socket.data.playerId)
+      return cb?.({ error: "Only the host can kick players." });
+    if (playerId === socket.data.playerId)
+      return cb?.({ error: "You can't kick yourself." });
+    const target = room.players.get(playerId);
+    if (!target) return cb?.({ error: "Player not found." });
+    if (target.socketId) {
+      io.to(target.socketId).emit("room:kicked");
+      const s = io.sockets.sockets.get(target.socketId);
+      if (s) {
+        s.leave(room.code);
+        s.data.roomCode = null;
+        s.data.playerId = null;
+      }
+    }
+    room.removePlayer(playerId);
+    cb?.({ ok: true });
+    if (room.players.size === 0) deleteRoom(room.code);
+    else sync(room);
+  });
+
+  socket.on("game:emote", ({ emote }, cb) => {
+    const room = currentRoom();
+    if (!room) return cb?.({ error: "Not in a room." });
+    const allowed = ["👍", "😂", "🤔", "😱", "🔥", "❤️", "🤨", "🎉"];
+    if (!allowed.includes(emote)) return cb?.({ error: "Unknown emote." });
+    io.to(room.code).emit("room:emote", {
+      playerId: socket.data.playerId,
+      emote,
+      at: Date.now(),
+    });
+    cb?.({ ok: true });
+  });
+
   socket.on("game:clue", ({ text }, cb) => {
     const room = currentRoom();
     if (!room) return cb?.({ error: "Not in a room." });

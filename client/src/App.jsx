@@ -1,17 +1,19 @@
 import { useEffect, useState, useCallback, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { socket, getPlayerId, getSavedName, saveName, emit } from "./socket.js";
+import { socket, getPlayerId, getSavedName, saveName, emit, saveRoom, clearSavedRoom, getSavedRoom } from "./socket.js";
 import Home from "./components/Home.jsx";
 import WaitingRoom from "./components/WaitingRoom.jsx";
 import CluePhase from "./components/CluePhase.jsx";
 import VotePhase from "./components/VotePhase.jsx";
 import RevealPhase from "./components/RevealPhase.jsx";
 import Toasts from "./components/Toasts.jsx";
+import EmoteLayer from "./components/EmoteLayer.jsx";
 
 export const GameCtx = createContext(null);
 export const useGame = () => useContext(GameCtx);
 
 let toastId = 0;
+let emoteId = 0;
 
 export default function App() {
   const [connected, setConnected] = useState(socket.connected);
@@ -19,6 +21,8 @@ export default function App() {
   const [role, setRole] = useState(null); // private word/role
   const [name, setName] = useState(getSavedName());
   const [toasts, setToasts] = useState([]);
+  const [emotes, setEmotes] = useState([]); // floating reactions
+  const [restoring, setRestoring] = useState(!!getSavedRoom());
   const playerId = getPlayerId();
 
   const pushToast = useCallback((message, type = "info") => {
@@ -28,23 +32,69 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const onConnect = () => setConnected(true);
+    // Try to restore our seat after a refresh or a dropped connection.
+    const attemptRejoin = async () => {
+      const code = getSavedRoom();
+      if (!code) return;
+      const res = await emit("room:join", {
+        code,
+        name: getSavedName(),
+        playerId,
+      });
+      if (res.error) {
+        // Room is gone (e.g. everyone left) — forget the stale code.
+        clearSavedRoom();
+        setRoom(null);
+        setRole(null);
+      }
+      setRestoring(false);
+    };
+
+    const onConnect = () => {
+      setConnected(true);
+      attemptRejoin();
+    };
     const onDisconnect = () => setConnected(false);
-    const onState = (s) => setRoom(s);
+    const onState = (s) => {
+      setRoom(s);
+      setRestoring(false);
+    };
     const onRole = (r) => setRole(r);
+    const onEmote = ({ playerId: pid, emote }) => {
+      const id = ++emoteId;
+      setEmotes((e) => [...e, { id, playerId: pid, emote }]);
+      setTimeout(() => setEmotes((e) => e.filter((x) => x.id !== id)), 2600);
+    };
+    const onKicked = () => {
+      clearSavedRoom();
+      setRoom(null);
+      setRole(null);
+      pushToast("You were removed from the room", "error");
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("room:state", onState);
     socket.on("room:role", onRole);
+    socket.on("room:emote", onEmote);
+    socket.on("room:kicked", onKicked);
+
+    // If the socket connected before this effect ran (autoConnect), rejoin now.
+    if (socket.connected) attemptRejoin();
+
+    // Safety net: never get stuck on the restoring screen.
+    const t = setTimeout(() => setRestoring(false), 4500);
 
     return () => {
+      clearTimeout(t);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("room:state", onState);
       socket.off("room:role", onRole);
+      socket.off("room:emote", onEmote);
+      socket.off("room:kicked", onKicked);
     };
-  }, []);
+  }, [pushToast, playerId]);
 
   // Reset private role whenever we go back to lobby.
   useEffect(() => {
@@ -60,6 +110,7 @@ export default function App() {
       saveName(name.trim());
       const res = await emit("room:create", { name: name.trim(), playerId });
       if (res.error) pushToast(res.error, "error");
+      else saveRoom(res.code);
     },
     async join(code) {
       if (!name.trim()) return pushToast("Enter a name first", "error");
@@ -71,6 +122,7 @@ export default function App() {
         playerId,
       });
       if (res.error) pushToast(res.error, "error");
+      else saveRoom(res.code);
     },
     async start() {
       const res = await emit("game:start");
@@ -92,8 +144,20 @@ export default function App() {
       const res = await emit("game:lobby");
       if (res.error) pushToast(res.error, "error");
     },
+    async settings(partial) {
+      const res = await emit("room:settings", partial);
+      if (res.error) pushToast(res.error, "error");
+    },
+    async kick(id) {
+      const res = await emit("room:kick", { playerId: id });
+      if (res.error) pushToast(res.error, "error");
+    },
+    emote(e) {
+      socket.emit("game:emote", { emote: e });
+    },
     leave() {
       socket.emit("room:leave");
+      clearSavedRoom();
       setRoom(null);
       setRole(null);
     },
@@ -110,27 +174,32 @@ export default function App() {
     setName,
     pushToast,
     actions,
+    emotes,
   };
 
-  const screen = !room ? "home" : room.phase;
+  const screen = restoring && !room ? "restoring" : !room ? "home" : room.phase;
 
   return (
     <GameCtx.Provider value={ctx}>
-      <div className="aurora" />
+      <div className="backdrop" />
+      <div className="backdrop-glow" />
+      <div className="backdrop-grid" />
       <div className="grain" />
       <ConnBadge connected={connected} />
       <Toasts toasts={toasts} />
+      <EmoteLayer emotes={emotes} players={room?.players} />
 
-      <main className="relative mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-6 sm:px-6">
+      <main className="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-6 sm:px-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={screen}
-            initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -24, filter: "blur(8px)" }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="flex flex-1 flex-col"
           >
+            {screen === "restoring" && <Restoring />}
             {screen === "home" && <Home />}
             {screen === "lobby" && <WaitingRoom />}
             {screen === "clue" && <CluePhase />}
@@ -143,15 +212,31 @@ export default function App() {
   );
 }
 
+function Restoring() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
+      <div className="grid h-14 w-14 place-items-center border border-line bg-panel-2 text-2xl">
+        🕵️
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="h-1.5 w-1.5 animate-blink rounded-full bg-gold" />
+        <span className="label">restoring your session</span>
+      </div>
+    </div>
+  );
+}
+
 function ConnBadge({ connected }) {
   return (
-    <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs font-medium">
+    <div className="fixed left-4 top-4 z-40 flex items-center gap-2 border border-line bg-panel px-2.5 py-1">
       <span
-        className={`h-2 w-2 rounded-full ${
-          connected ? "bg-neon-lime animate-pulseGlow" : "bg-red-500"
+        className={`h-1.5 w-1.5 rounded-full ${
+          connected ? "bg-safe" : "animate-blink bg-danger"
         }`}
       />
-      {connected ? "connected" : "reconnecting…"}
+      <span className="label !text-[0.6rem] !tracking-[0.2em]">
+        {connected ? "secure line" : "reconnecting"}
+      </span>
     </div>
   );
 }

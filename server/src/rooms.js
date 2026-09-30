@@ -1,5 +1,5 @@
 import { customAlphabet } from "nanoid";
-import { randomWordPair } from "./words.js";
+import { drawWords, isValidCategory, makeHint, pretty } from "./words.js";
 
 const roomCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 5);
 
@@ -9,6 +9,8 @@ export const PHASES = {
   VOTE: "vote",
   REVEAL: "reveal",
 };
+
+export const MODES = { DIFFERENT: "different", NOWORD: "noword" };
 
 const MAX_PLAYERS = 12;
 
@@ -24,6 +26,19 @@ function shuffle(arr) {
   return a;
 }
 
+/** Max imposters that still leaves a crew majority. */
+export function maxImposters(playerCount) {
+  if (playerCount < 3) return 1;
+  return Math.max(1, Math.floor((playerCount - 1) / 2));
+}
+
+const DEFAULT_SETTINGS = {
+  mode: MODES.DIFFERENT,
+  category: "random",
+  imposterCount: 1,
+  revealCategory: false,
+};
+
 class Room {
   constructor(code) {
     this.code = code;
@@ -32,12 +47,15 @@ class Room {
     this.players = new Map();
     this.hostId = null;
     this.round = 0;
+    this.settings = { ...DEFAULT_SETTINGS };
 
     // per-round state
+    this.category = null;
     this.commonWord = null;
     this.imposterWord = null;
-    this.imposterId = null;
-    this.order = []; // playerIds in clue order
+    this.hint = null;
+    this.imposterIds = [];
+    this.order = [];
     this.turnIndex = 0;
     this.clues = new Map(); // playerId -> clue string
     this.votes = new Map(); // voterId -> targetId
@@ -65,15 +83,39 @@ class Room {
     }
   }
 
+  updateSettings(partial) {
+    const s = this.settings;
+    if (partial.mode && Object.values(MODES).includes(partial.mode))
+      s.mode = partial.mode;
+    if (partial.category !== undefined && isValidCategory(partial.category))
+      s.category = partial.category;
+    if (partial.imposterCount !== undefined) {
+      const n = Number(partial.imposterCount);
+      if (Number.isInteger(n) && n >= 1) s.imposterCount = n;
+    }
+    if (partial.revealCategory !== undefined)
+      s.revealCategory = !!partial.revealCategory;
+
+    // keep imposterCount within a sane range for the current room size
+    const cap = maxImposters(Math.max(3, this.activePlayers().length));
+    s.imposterCount = Math.min(Math.max(1, s.imposterCount), cap);
+    return { ok: true };
+  }
+
   /** Sanitized state safe to broadcast to everyone (no secret words/roles). */
   publicState() {
     const revealing = this.phase === PHASES.REVEAL;
+    const showCat =
+      this.settings.revealCategory && this.phase !== PHASES.LOBBY;
     return {
       code: this.code,
       phase: this.phase,
       hostId: this.hostId,
       round: this.round,
       maxPlayers: MAX_PLAYERS,
+      settings: this.settings,
+      maxImposters: maxImposters(Math.max(3, this.activePlayers().length)),
+      category: showCat || revealing ? this.category : null,
       players: this.playerList.map((p) => ({
         id: p.id,
         name: p.name,
@@ -91,7 +133,6 @@ class Room {
         text,
       })),
       votesCount: this.votes.size,
-      // Only expose vote targets + roles during reveal.
       votes: revealing
         ? [...this.votes.entries()].map(([voterId, targetId]) => ({
             voterId,
@@ -114,24 +155,48 @@ class Room {
     this.result = null;
     this.turnIndex = 0;
 
-    const pair = randomWordPair();
-    this.commonWord = pair.common;
-    this.imposterWord = pair.imposter;
+    // Words
+    const { category, words } = drawWords(this.settings.category, 2);
+    this.category = category;
+    this.commonWord = pretty(words[0]);
+    this.imposterWord =
+      this.settings.mode === MODES.DIFFERENT ? pretty(words[1]) : null;
+    this.hint =
+      this.settings.mode === MODES.NOWORD ? makeHint(this.commonWord) : null;
 
+    // Imposters
+    const cap = maxImposters(active.length);
+    const count = Math.min(Math.max(1, this.settings.imposterCount), cap);
     const ids = active.map((p) => p.id);
-    this.imposterId = ids[Math.floor(Math.random() * ids.length)];
+    this.imposterIds = shuffle(ids).slice(0, count);
     this.order = shuffle(ids);
     return { ok: true };
+  }
+
+  isImposter(playerId) {
+    return this.imposterIds.includes(playerId);
   }
 
   /** Private per-player payload with their secret word/role. */
   roleFor(playerId) {
     if (this.phase === PHASES.LOBBY) return null;
-    const isImposter = playerId === this.imposterId;
+    const imposter = this.isImposter(playerId);
+    const allies = imposter
+      ? this.imposterIds
+          .filter((id) => id !== playerId)
+          .map((id) => this.players.get(id)?.name)
+          .filter(Boolean)
+      : [];
     return {
       round: this.round,
-      isImposter,
-      word: isImposter ? this.imposterWord : this.commonWord,
+      mode: this.settings.mode,
+      isImposter: imposter,
+      word: imposter ? this.imposterWord : this.commonWord, // null for noword imposter
+      category:
+        imposter || this.settings.revealCategory ? this.category : null,
+      hint: imposter ? this.hint : null,
+      imposterCount: this.imposterIds.length,
+      allies,
     };
   }
 
@@ -143,7 +208,6 @@ class Room {
     if (!clean) return { error: "Clue cannot be empty." };
     this.clues.set(playerId, clean);
     this.turnIndex += 1;
-    // Advance past disconnected players
     while (
       this.turnIndex < this.order.length &&
       !this.players.get(this.order[this.turnIndex])?.connected
@@ -186,25 +250,30 @@ class Room {
       }
     }
 
-    const caught = !tie && topId === this.imposterId;
+    const votedOutImposter = !tie && this.isImposter(topId);
+    const caught = votedOutImposter;
 
-    // Scoring
     if (caught) {
       for (const [voterId, targetId] of this.votes.entries()) {
-        if (targetId === this.imposterId && voterId !== this.imposterId) {
+        if (this.isImposter(targetId) && !this.isImposter(voterId)) {
           const p = this.players.get(voterId);
           if (p) p.score += 1;
         }
       }
     } else {
-      const imp = this.players.get(this.imposterId);
-      if (imp) imp.score += 3;
+      for (const impId of this.imposterIds) {
+        const imp = this.players.get(impId);
+        if (imp) imp.score += 3;
+      }
     }
 
     this.result = {
-      imposterId: this.imposterId,
+      mode: this.settings.mode,
+      imposterIds: [...this.imposterIds],
       imposterWord: this.imposterWord,
       commonWord: this.commonWord,
+      category: this.category,
+      hint: this.hint,
       votedOutId: tie ? null : topId,
       tie,
       caught,
@@ -215,9 +284,11 @@ class Room {
 
   backToLobby() {
     this.phase = PHASES.LOBBY;
+    this.category = null;
     this.commonWord = null;
     this.imposterWord = null;
-    this.imposterId = null;
+    this.hint = null;
+    this.imposterIds = [];
     this.order = [];
     this.turnIndex = 0;
     this.clues = new Map();
