@@ -22,7 +22,7 @@ export const MODES = {
   different: {
     id: "different",
     label: "Different Word",
-    desc: "Imposters get a similar but different word",
+    desc: "Imposter gets a similar word — and won't know it's them",
     emoji: "🔀",
   },
   noword: {

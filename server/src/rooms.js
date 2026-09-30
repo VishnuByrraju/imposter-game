@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
   category: "random",
   imposterCount: 1,
   revealCategory: false,
-  voiceMode: false,
+  voiceMode: true,
 };
 
 class Room {
@@ -182,21 +182,30 @@ class Room {
   /** Private per-player payload with their secret word/role. */
   roleFor(playerId) {
     if (this.phase === PHASES.LOBBY) return null;
-    const imposter = this.isImposter(playerId);
-    const allies = imposter
+    const actuallyImposter = this.isImposter(playerId);
+
+    // In "Different Word" mode the imposter is NOT told they're the imposter —
+    // they just receive a (different) word and look like everyone else. They
+    // only find out at the reveal. In "No Word" mode they must know, since they
+    // don't get a word at all.
+    const tellImposter =
+      actuallyImposter && this.settings.mode === MODES.NOWORD;
+
+    const allies = tellImposter
       ? this.imposterIds
           .filter((id) => id !== playerId)
           .map((id) => this.players.get(id)?.name)
           .filter(Boolean)
       : [];
+
     return {
       round: this.round,
       mode: this.settings.mode,
-      isImposter: imposter,
-      word: imposter ? this.imposterWord : this.commonWord, // null for noword imposter
+      isImposter: tellImposter, // hidden imposters see themselves as cleared
+      word: actuallyImposter ? this.imposterWord : this.commonWord, // null for noword imposter
       category:
-        imposter || this.settings.revealCategory ? this.category : null,
-      hint: imposter ? this.hint : null,
+        tellImposter || this.settings.revealCategory ? this.category : null,
+      hint: tellImposter ? this.hint : null,
       imposterCount: this.imposterIds.length,
       allies,
     };
