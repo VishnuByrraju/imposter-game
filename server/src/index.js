@@ -153,9 +153,22 @@ io.on("connection", (socket) => {
       }
     }
     room.removePlayer(playerId);
+    if (room.players.size === 0) {
+      deleteRoom(room.code);
+    } else {
+      room.checkProgressAfterAbsence();
+      sync(room);
+    }
     cb?.({ ok: true });
-    if (room.players.size === 0) deleteRoom(room.code);
-    else sync(room);
+  });
+
+  socket.on("game:skipTurn", (_p, cb) => {
+    const room = currentRoom();
+    if (!room) return cb?.({ error: "Not in a room." });
+    const res = room.skipCurrentTurn(socket.data.playerId);
+    if (res.error) return cb?.(res);
+    cb?.({ ok: true });
+    sync(room);
   });
 
   socket.on("game:emote", ({ emote }, cb) => {
@@ -217,15 +230,18 @@ io.on("connection", (socket) => {
     socket.leave(room.code);
     socket.data.roomCode = null;
     socket.data.playerId = null;
-    if (room.players.size === 0) deleteRoom(room.code);
-    else sync(room);
+    if (room.players.size === 0) {
+      deleteRoom(room.code);
+    } else {
+      room.checkProgressAfterAbsence();
+      sync(room);
+    }
   });
 
   socket.on("disconnect", () => {
     const room = currentRoom();
     if (!room) return;
-    const player = room.players.get(socket.data.playerId);
-    if (player) player.connected = false;
+    room.markDisconnected(socket.data.playerId);
 
     // If nobody is connected, clean up after a grace period.
     if (room.activePlayers().length === 0) {

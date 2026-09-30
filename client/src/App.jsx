@@ -23,6 +23,7 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [emotes, setEmotes] = useState([]); // floating reactions
   const [restoring, setRestoring] = useState(!!getSavedRoom());
+  const [busy, setBusy] = useState(false); // guards double-tap create/join
   const playerId = getPlayerId();
 
   const pushToast = useCallback((message, type = "info") => {
@@ -106,21 +107,27 @@ export default function App() {
 
   const actions = {
     async create() {
+      if (busy) return;
       if (!name.trim()) return pushToast("Enter a name first", "error");
+      setBusy(true);
       saveName(name.trim());
       const res = await emit("room:create", { name: name.trim(), playerId });
+      setBusy(false);
       if (res.error) pushToast(res.error, "error");
       else saveRoom(res.code);
     },
     async join(code) {
+      if (busy) return;
       if (!name.trim()) return pushToast("Enter a name first", "error");
       if (!code?.trim()) return pushToast("Enter a room code", "error");
+      setBusy(true);
       saveName(name.trim());
       const res = await emit("room:join", {
         code: code.trim().toUpperCase(),
         name: name.trim(),
         playerId,
       });
+      setBusy(false);
       if (res.error) pushToast(res.error, "error");
       else saveRoom(res.code);
     },
@@ -152,6 +159,10 @@ export default function App() {
       const res = await emit("room:kick", { playerId: id });
       if (res.error) pushToast(res.error, "error");
     },
+    async skipTurn() {
+      const res = await emit("game:skipTurn");
+      if (res.error) pushToast(res.error, "error");
+    },
     emote(e) {
       socket.emit("game:emote", { emote: e });
     },
@@ -175,6 +186,7 @@ export default function App() {
     pushToast,
     actions,
     emotes,
+    busy,
   };
 
   const screen = restoring && !room ? "restoring" : !room ? "home" : room.phase;
@@ -186,6 +198,7 @@ export default function App() {
       <div className="backdrop-grid" />
       <div className="grain" />
       <ConnBadge connected={connected} />
+      {room && room.phase !== "lobby" && <ExitControl />}
       <Toasts toasts={toasts} />
       <EmoteLayer emotes={emotes} players={room?.players} />
 
@@ -238,5 +251,31 @@ function ConnBadge({ connected }) {
         {connected ? "secure line" : "reconnecting"}
       </span>
     </div>
+  );
+}
+
+// Requires a second tap within 3s to actually leave — guards against
+// accidentally ending your participation in a live round.
+function ExitControl() {
+  const { actions } = useGame();
+  const [confirmArmed, setConfirmArmed] = useState(false);
+
+  useEffect(() => {
+    if (!confirmArmed) return;
+    const t = setTimeout(() => setConfirmArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmArmed]);
+
+  return (
+    <button
+      onClick={() => (confirmArmed ? actions.leave() : setConfirmArmed(true))}
+      className={`fixed right-4 top-4 z-40 border px-2.5 py-1 text-[0.6rem] font-mono uppercase tracking-[0.2em] transition ${
+        confirmArmed
+          ? "border-danger bg-danger/10 text-danger"
+          : "border-line bg-panel text-ink-dim hover:text-ink"
+      }`}
+    >
+      {confirmArmed ? "tap to confirm" : "leave"}
+    </button>
   );
 }

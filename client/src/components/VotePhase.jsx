@@ -10,9 +10,14 @@ export default function VotePhase() {
   const [votedTarget, setVotedTarget] = useState(null);
 
   const clueMap = Object.fromEntries(room.clues.map((c) => [c.playerId, c.text]));
+  const cluedIds = new Set(room.clues.map((c) => c.playerId));
+  const skippedIds = new Set(room.skippedIds || []);
   const others = room.players.filter((p) => p.id !== playerId && p.connected);
-  const votedCount = room.votesCount;
   const total = room.players.filter((p) => p.connected).length;
+  // A voter who already cast a ballot and then disconnected can leave the
+  // count above the current active total — clamp so the UI never shows
+  // something like "4/3 voted".
+  const votedCount = Math.min(room.votesCount, total);
   const cat = categoryMeta(room.category);
 
   const cast = (id) => {
@@ -49,7 +54,9 @@ export default function VotePhase() {
         <div className="mt-3 h-1 w-full bg-panel-2">
           <motion.div
             className="h-full bg-danger"
-            animate={{ width: `${(votedCount / Math.max(1, total)) * 100}%` }}
+            animate={{
+              width: `${Math.min(100, (votedCount / Math.max(1, total)) * 100)}%`,
+            }}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
           />
         </div>
@@ -78,7 +85,13 @@ export default function VotePhase() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">{p.name}</div>
                 <div className="mono mt-0.5 truncate text-sm text-ink-dim">
-                  {clueMap[p.id] ? `“${clueMap[p.id]}”` : "🎙️ described aloud"}
+                  {cluedIds.has(p.id)
+                    ? clueMap[p.id]
+                      ? `“${clueMap[p.id]}”`
+                      : "🎙️ described aloud"
+                    : skippedIds.has(p.id)
+                    ? "— turn skipped —"
+                    : "— no statement —"}
                 </div>
               </div>
               <span

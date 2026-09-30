@@ -5,7 +5,7 @@ import { Logo, Panel } from "./ui.jsx";
 import InstallButton from "./InstallButton.jsx";
 
 export default function Home() {
-  const { name, setName, actions, connected } = useGame();
+  const { name, setName, actions, connected, busy } = useGame();
   const [code, setCode] = useState("");
   const [mode, setMode] = useState("menu"); // menu | join
 
@@ -44,14 +44,14 @@ export default function Home() {
           <div className="flex flex-col gap-3">
             <button
               className="btn-primary text-lg"
-              disabled={!connected}
+              disabled={!connected || busy}
               onClick={actions.create}
             >
-              Open a new case
+              {busy ? "Opening…" : "Open a new case"}
             </button>
             <button
               className="btn-ghost"
-              disabled={!connected}
+              disabled={!connected || busy}
               onClick={() => setMode("join")}
             >
               Join with a case code
@@ -74,10 +74,10 @@ export default function Home() {
               </button>
               <button
                 className="btn-primary flex-1"
-                disabled={!connected}
+                disabled={!connected || busy}
                 onClick={() => actions.join(code)}
               >
-                Join
+                {busy ? "Joining…" : "Join"}
               </button>
             </div>
           </div>

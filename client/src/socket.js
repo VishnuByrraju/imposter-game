@@ -43,9 +43,21 @@ export function clearSavedRoom() {
   localStorage.removeItem("imposter_room");
 }
 
-// Promise wrapper around emit-with-ack.
-export function emit(event, payload) {
+// Promise wrapper around emit-with-ack. Times out so the UI never hangs
+// silently if the server never acks (e.g. connection drops mid-request).
+export function emit(event, payload, timeoutMs = 8000) {
   return new Promise((resolve) => {
-    socket.emit(event, payload, (res) => resolve(res || {}));
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({ error: "Request timed out. Check your connection and try again." });
+    }, timeoutMs);
+    socket.emit(event, payload, (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(res || {});
+    });
   });
 }

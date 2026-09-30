@@ -6,13 +6,14 @@ import { categoryMeta } from "../constants.js";
 import EmoteBar from "./EmoteBar.jsx";
 
 export default function CluePhase() {
-  const { room, role, playerId, actions } = useGame();
+  const { room, role, playerId, isHost, actions } = useGame();
   const [clue, setClue] = useState("");
 
   const isMyTurn = room.turnId === playerId;
   const voice = !!room.settings?.voiceMode;
   const currentPlayer = room.players.find((p) => p.id === room.turnId);
   const clueMap = Object.fromEntries(room.clues.map((c) => [c.playerId, c.text]));
+  const skippedIds = new Set(room.skippedIds || []);
   const orderedPlayers = room.order
     .map((id) => room.players.find((p) => p.id === id))
     .filter(Boolean);
@@ -95,6 +96,10 @@ export default function CluePhase() {
                       >
                         {voice ? "speaking…" : "on record…"}
                       </motion.span>
+                    ) : skippedIds.has(p.id) ? (
+                      <span className="label !text-ink-faint">skipped</span>
+                    ) : !p.connected ? (
+                      <span className="label !text-danger">offline</span>
                     ) : (
                       <span className="label">pending</span>
                     )}
@@ -150,6 +155,14 @@ export default function CluePhase() {
             </motion.div>
           )}
         </AnimatePresence>
+        {isHost && (
+          <button
+            onClick={actions.skipTurn}
+            className="btn-ghost mt-2 w-full !py-2 !text-xs"
+          >
+            Skip {currentPlayer?.name || "this player"}'s turn →
+          </button>
+        )}
       </div>
 
       <EmoteBar />

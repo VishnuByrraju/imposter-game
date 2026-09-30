@@ -61,6 +61,7 @@ class Room {
     this.clues = new Map(); // playerId -> clue string
     this.votes = new Map(); // voterId -> targetId
     this.result = null;
+    this.skipped = new Set(); // playerIds auto-skipped or force-skipped this round
   }
 
   get playerList() {
@@ -78,9 +79,54 @@ class Room {
 
   removePlayer(id) {
     this.players.delete(id);
-    if (this.hostId === id) {
-      const next = this.activePlayers()[0] || this.playerList[0];
-      this.hostId = next ? next.id : null;
+    this._reassignHostIfNeeded();
+  }
+
+  /** Promote a new host if the recorded host is gone or disconnected. */
+  _reassignHostIfNeeded() {
+    const host = this.players.get(this.hostId);
+    if (host && host.connected) return;
+    const next = this.activePlayers()[0];
+    if (next) {
+      this.hostId = next.id;
+    } else if (!host) {
+      // Nobody connected and the old host no longer exists at all.
+      this.hostId = this.playerList[0]?.id ?? null;
+    }
+    // else: host is just temporarily offline and nobody else is active —
+    // leave hostId pointing at them so they resume as host on reconnect.
+  }
+
+  /** Mark a player offline, hand off host duties if needed, and make sure
+   *  the round can't get stuck waiting on someone who just left. */
+  markDisconnected(playerId) {
+    const p = this.players.get(playerId);
+    if (p) p.connected = false;
+    this._reassignHostIfNeeded();
+    this.checkProgressAfterAbsence();
+  }
+
+  /** Advance past a stalled clue-turn or tally a vote that's effectively
+   *  complete once disconnected/removed players are excluded. Safe to call
+   *  any time — it's a no-op unless something is actually stuck. */
+  checkProgressAfterAbsence() {
+    if (this.phase === PHASES.CLUE) {
+      while (
+        this.turnIndex < this.order.length &&
+        !this.players.get(this.order[this.turnIndex])?.connected
+      ) {
+        this.skipped.add(this.order[this.turnIndex]);
+        this.turnIndex += 1;
+      }
+      if (this.turnIndex >= this.order.length) {
+        this.phase = PHASES.VOTE;
+      }
+    }
+    if (this.phase === PHASES.VOTE) {
+      const voters = this.activePlayers().map((p) => p.id);
+      if (voters.length > 0 && voters.every((id) => this.votes.has(id))) {
+        this.tally();
+      }
     }
   }
 
@@ -130,6 +176,7 @@ class Room {
       })),
       order: this.order,
       turnId: this.order[this.turnIndex] || null,
+      skippedIds: [...this.skipped],
       clues: [...this.clues.entries()].map(([playerId, text]) => ({
         playerId,
         text,
@@ -156,6 +203,7 @@ class Room {
     this.votes = new Map();
     this.result = null;
     this.turnIndex = 0;
+    this.skipped = new Set();
 
     // Words
     const { category, words } = drawWords(this.settings.category, 2);
@@ -221,15 +269,20 @@ class Room {
       return { error: "Clue cannot be empty." };
     this.clues.set(playerId, clean);
     this.turnIndex += 1;
-    while (
-      this.turnIndex < this.order.length &&
-      !this.players.get(this.order[this.turnIndex])?.connected
-    ) {
-      this.turnIndex += 1;
-    }
-    if (this.turnIndex >= this.order.length) {
-      this.phase = PHASES.VOTE;
-    }
+    this.checkProgressAfterAbsence();
+    return { ok: true };
+  }
+
+  /** Host-only: force-advance past a connected-but-unresponsive player. */
+  skipCurrentTurn(requesterId) {
+    if (requesterId !== this.hostId)
+      return { error: "Only the case officer can skip a turn." };
+    if (this.phase !== PHASES.CLUE) return { error: "Not the clue phase." };
+    const current = this.order[this.turnIndex];
+    if (!current) return { error: "No active turn." };
+    this.skipped.add(current);
+    this.turnIndex += 1;
+    this.checkProgressAfterAbsence();
     return { ok: true };
   }
 
@@ -238,10 +291,7 @@ class Room {
     if (!this.players.has(targetId)) return { error: "Invalid vote target." };
     if (targetId === voterId) return { error: "You cannot vote for yourself." };
     this.votes.set(voterId, targetId);
-
-    const voters = this.activePlayers().map((p) => p.id);
-    const allVoted = voters.every((id) => this.votes.has(id));
-    if (allVoted) this.tally();
+    this.checkProgressAfterAbsence();
     return { ok: true };
   }
 
@@ -307,6 +357,7 @@ class Room {
     this.clues = new Map();
     this.votes = new Map();
     this.result = null;
+    this.skipped = new Set();
   }
 }
 
