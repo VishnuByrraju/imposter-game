@@ -10,6 +10,7 @@ export default function CluePhase() {
   const [clue, setClue] = useState("");
 
   const isMyTurn = room.turnId === playerId;
+  const voice = !!room.settings?.voiceMode;
   const currentPlayer = room.players.find((p) => p.id === room.turnId);
   const clueMap = Object.fromEntries(room.clues.map((c) => [c.playerId, c.text]));
   const orderedPlayers = room.order
@@ -17,7 +18,7 @@ export default function CluePhase() {
     .filter(Boolean);
 
   const submit = () => {
-    if (!clue.trim()) return;
+    if (!voice && !clue.trim()) return;
     actions.clue(clue.trim());
     setClue("");
   };
@@ -66,14 +67,25 @@ export default function CluePhase() {
                 <div className="ml-auto text-right">
                   <AnimatePresence mode="wait">
                     {has ? (
-                      <motion.span
-                        key="clue"
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="mono border border-line bg-bg px-2.5 py-1 text-sm text-ink"
-                      >
-                        {clueMap[p.id]}
-                      </motion.span>
+                      clueMap[p.id] ? (
+                        <motion.span
+                          key="clue"
+                          initial={{ opacity: 0, x: 8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="mono border border-line bg-bg px-2.5 py-1 text-sm text-ink"
+                        >
+                          {clueMap[p.id]}
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="spoke"
+                          initial={{ opacity: 0, x: 8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="label !text-safe"
+                        >
+                          🎙️ described
+                        </motion.span>
+                      )
                     ) : active ? (
                       <motion.span
                         key="thinking"
@@ -81,7 +93,7 @@ export default function CluePhase() {
                         animate={{ opacity: 1 }}
                         className="label !text-gold"
                       >
-                        on record…
+                        {voice ? "speaking…" : "on record…"}
                       </motion.span>
                     ) : (
                       <span className="label">pending</span>
@@ -105,16 +117,22 @@ export default function CluePhase() {
               className="card-raised flex gap-2 p-2"
             >
               <input
-                autoFocus
+                autoFocus={!voice}
                 className="input flex-1"
-                placeholder="Give your one-word clue…"
+                placeholder={
+                  voice ? "Add a note (optional)…" : "Give your one-word clue…"
+                }
                 value={clue}
                 maxLength={40}
                 onChange={(e) => setClue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
               />
-              <button className="btn-primary" onClick={submit} disabled={!clue.trim()}>
-                Record
+              <button
+                className="btn-primary"
+                onClick={submit}
+                disabled={!voice && !clue.trim()}
+              >
+                {voice ? "Done" : "Record"}
               </button>
             </motion.div>
           ) : (
@@ -127,7 +145,7 @@ export default function CluePhase() {
             >
               <span className="h-1.5 w-1.5 animate-blink rounded-full bg-gold" />
               <span className="label">
-                questioning {currentPlayer?.name || "…"}
+                {voice ? "listening to" : "questioning"} {currentPlayer?.name || "…"}
               </span>
             </motion.div>
           )}

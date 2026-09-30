@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   category: "random",
   imposterCount: 1,
   revealCategory: false,
+  voiceMode: false,
 };
 
 class Room {
@@ -95,6 +96,7 @@ class Room {
     }
     if (partial.revealCategory !== undefined)
       s.revealCategory = !!partial.revealCategory;
+    if (partial.voiceMode !== undefined) s.voiceMode = !!partial.voiceMode;
 
     // keep imposterCount within a sane range for the current room size
     const cap = maxImposters(Math.max(3, this.activePlayers().length));
@@ -205,7 +207,9 @@ class Room {
     if (this.order[this.turnIndex] !== playerId)
       return { error: "It is not your turn." };
     const clean = String(text || "").trim().slice(0, 40);
-    if (!clean) return { error: "Clue cannot be empty." };
+    // In voice mode the typed note is optional (players describe aloud).
+    if (!clean && !this.settings.voiceMode)
+      return { error: "Clue cannot be empty." };
     this.clues.set(playerId, clean);
     this.turnIndex += 1;
     while (

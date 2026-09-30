@@ -78,7 +78,7 @@ export default function VotePhase() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">{p.name}</div>
                 <div className="mono mt-0.5 truncate text-sm text-ink-dim">
-                  “{clueMap[p.id] || "—"}”
+                  {clueMap[p.id] ? `“${clueMap[p.id]}”` : "🎙️ described aloud"}
                 </div>
               </div>
               <span

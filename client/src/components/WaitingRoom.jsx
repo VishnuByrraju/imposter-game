@@ -168,6 +168,26 @@ function Settings({ s, isHost, set, maxImposters }) {
         })}
       </div>
 
+      {/* Voice mode */}
+      <button
+        disabled={!isHost}
+        onClick={() => set({ voiceMode: !s.voiceMode })}
+        className={`mb-4 flex w-full items-center justify-between border p-3 text-left transition ${
+          s.voiceMode ? "border-gold/50 bg-gold/[0.06]" : "border-line bg-panel-2"
+        } ${!isHost && "cursor-default"}`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">🎙️</span>
+          <div>
+            <div className="font-semibold">Voice call mode</div>
+            <div className="text-xs text-ink-dim">
+              Describe aloud — typing a clue is optional
+            </div>
+          </div>
+        </div>
+        <Toggle on={s.voiceMode} />
+      </button>
+
       {/* Category */}
       <label className="label mb-2 block">Category</label>
       <div className="mb-4 flex flex-wrap gap-1.5">

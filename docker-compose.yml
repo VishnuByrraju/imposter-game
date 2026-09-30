@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: imposter-game:latest
+    container_name: imposter-game
+    restart: unless-stopped
+    ports:
+      # host:container — override the host port with PORT in a .env file if needed
+      - "${PORT:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      # Restrict socket.io CORS in production, e.g. https://your-domain.com
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-*}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
